@@ -5,6 +5,8 @@ from sklearn.impute import SimpleImputer
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from scipy.optimize import curve_fit
+
+
 #Data Preprocessing
 def pre_process_data(climate_change_data, indicator):    
     required_columns = ['country', 'year', 'co2', indicator]
@@ -15,7 +17,8 @@ def pre_process_data(climate_change_data, indicator):
     
     #handle null values
     imputer= SimpleImputer(missing_values = np.nan, strategy = 'mean')
-    required_data_df.iloc[:, 2:4] = imputer.fit_transform(required_data_df.iloc[:, 2:4])
+    required_data_df.iloc[:, 2:4] = imputer.fit_transform(
+        required_data_df.iloc[:, 2:4])
     return required_data_df
 
 
@@ -36,7 +39,8 @@ def visual_insights(required_data_df, year):
 
 #feature scaling (Normalisation)
 def feature_scaling(required_data_df, sc, indicator):
-    required_data_df.iloc[:, 2:4] = sc.fit_transform(required_data_df.iloc[:, 2:4])
+    required_data_df.iloc[:, 2:4] = sc.fit_transform(
+        required_data_df.iloc[:, 2:4])
     
     #consider only co2_pergdp and gdp colums for clustering
     final_columns = ['co2', indicator]
@@ -49,7 +53,9 @@ def elbow_method(normalised_data):
     wcss = []
     for i in range(1,11):
         #use k-means++ to avoid random initialisation trap
-        kmeans = KMeans(n_clusters = i, init = 'k-means++', random_state = 42)
+        kmeans = KMeans(n_clusters = i, 
+                        init = 'k-means++', 
+                        random_state = 42)
         kmeans.fit(normalised_data)
         wcss.append(kmeans.inertia_)
     
@@ -63,7 +69,8 @@ def elbow_method(normalised_data):
 
 #training K-Means model on dataset
 def fit_kmeans_model(normalised_data, n_clusters):
-    kmeans = KMeans(n_clusters = n_clusters, init = 'k-means++', random_state = 42)
+    kmeans = KMeans(n_clusters = n_clusters, 
+                    init = 'k-means++', random_state = 42)
     dependent_variable = kmeans.fit_predict(normalised_data)
     return dependent_variable, kmeans
     
@@ -113,8 +120,115 @@ def cluster_visualisation(dependent_variable, plot_data, kmeans, indicator):
     plt.show()
 
 
+# Analyze the clusters
+def cluster_analyzation(original_df, kmeans, sc, indicator):    
+    for cluster in range(6):
+        cluster_data = original_df[original_df['cluster'] == cluster]
+        cluster_center = sc.inverse_transform(
+            [kmeans.cluster_centers_[cluster]])
+        print(f"Cluster {cluster} - Center: {cluster_center}")
+        print(cluster_data[['country', 'year', 'co2', indicator]])
+        print()
 
-#main method
+
+#polynomial function
+def polynomial_func(x, a, b, c):
+    return a * x**2 + b * x + c
+
+
+# Estimate confidence ranges using the provided err_ranges function
+def err_ranges(x, y, popt, pcov, nstd=1.96):
+    perr = np.sqrt(np.diag(pcov))
+    lower = popt - nstd * perr[:, np.newaxis]
+    upper = popt + nstd * perr[:, np.newaxis]
+    return lower.flatten(), upper.flatten()
+
+
+# to scale values
+def scale_values(original_df, sc, country):
+    country_data = original_df[original_df['country'] == country]
+    
+    year_unscaled = country_data['year'].values
+    co2_unscaled = country_data['co2'].values
+    
+    # Normalize the data using StandardScaler
+    year_scaled = sc.fit_transform(year_unscaled.reshape(-1, 1))  
+    co2_scaled = sc.fit_transform(co2_unscaled.reshape(-1, 1)) 
+    return year_scaled, co2_scaled
+
+
+#generate lower and upper confidence
+def generate_confidence_bounds(year, 
+                               co2, 
+                               initial_guess, 
+                               sc, 
+                               future_years, 
+                               params):
+    _, cov = curve_fit(polynomial_func, year.flatten(), 
+                       co2.flatten(), p0=initial_guess, maxfev = 10000)
+    lower_confidence, upper_confidence = err_ranges(year.flatten(), 
+                                                    co2.flatten(), 
+                                                    params, cov)
+    
+    # Rescale the confidence intervals back to the original scale
+    lower_confidence = sc.inverse_transform(
+        lower_confidence.reshape(-1, 1)).flatten()
+    upper_confidence = sc.inverse_transform(
+        upper_confidence.reshape(-1, 1)).flatten()
+    
+    # Ensure confidence ranges have the same length as future_years
+    lower_confidence = np.pad(lower_confidence, 
+                              (0, len(future_years) - len(lower_confidence)), 
+                              mode='constant')
+    upper_confidence = np.pad(upper_confidence, 
+                              (0, len(future_years) - len(upper_confidence)), 
+                              mode='constant')
+    return lower_confidence, upper_confidence
+
+
+# Model Fitting using curve_fit
+def model_curve_fit(original_df, sc):
+    year, co2 = scale_values(original_df, sc, "United Kingdom")
+    
+    # Fit the data to the exponential growth model
+    initial_guess = [1, 1, 1]  # Adjust the initial guess as per data
+    params, _ = curve_fit(polynomial_func, year.flatten(), 
+                          co2.flatten(), p0=initial_guess, maxfev = 10000)
+    
+    # Generate predictions for future years
+    future_years = np.arange(2033, 2044)  # Example range of future years
+    # Rescale future years using the same scaler
+    future_years_scaled = sc.transform(future_years.reshape(-1, 1))  
+    predicted_values_scaled = polynomial_func(
+        future_years_scaled.flatten(), *params)
+    
+    # Rescale the predicted values back to the original scale
+    predicted_values = sc.inverse_transform(
+        predicted_values_scaled.reshape(-1,1)).flatten()
+
+    lower_confidence, upper_confidence = generate_confidence_bounds(
+        year, co2, initial_guess, sc, future_years, params)
+    
+    #plot graph
+    plot_confidence_range(year, co2, lower_confidence, 
+                          upper_confidence, future_years, predicted_values)
+    
+    
+#Plotting
+def plot_confidence_range(year, co2, lower_confidence, 
+                          upper_confidence, future_years, predicted_values):
+    plt.scatter(year, co2, label='Actual Data')
+    plt.plot(future_years, predicted_values, label='Best Fitting Function')
+    plt.fill_between(future_years, lower_confidence, 
+                     upper_confidence, label='Confidence Range')
+    plt.xlabel('Year')
+    plt.ylabel('CO2 emissions')
+    plt.title('Polynomial Growth Model Fit')
+    plt.legend()
+    plt.show()
+
+
+#Main function
 def main():
     #Importing dataset
     climate_change_data = pd.read_csv('CO2 dataset.csv')
@@ -138,7 +252,7 @@ def main():
 
     #Store original values before normalising to plot in the end
     plot_columns = ['co2', indicator]
-    plot_data = required_data_df[plot_columns]
+    plot_data = required_data_df[plot_columns]  
     plot_data = np.array(plot_data)
     
     #feature scaling
@@ -148,6 +262,7 @@ def main():
     #elbow method
     elbow_method(normalised_data) #from graph n_clusters = 6
     
+    
     #fit kmeans model
     dependent_variable, kmeans = fit_kmeans_model(normalised_data, 6)
     
@@ -156,8 +271,13 @@ def main():
     
     #visualise clusters
     cluster_visualisation(dependent_variable, plot_data, kmeans, indicator)
-
+    
+    #analyze clusters
+    cluster_analyzation(original_df, kmeans, sc, indicator)
+    
+    #apply curve_fit function
+    model_curve_fit(original_df, sc)  
+    
+    
 if __name__ == "__main__":
     main()
-
-
