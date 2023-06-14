@@ -59,6 +59,59 @@ def elbow_method(normalised_data):
     plt.xlabel('Number of clusters')
     plt.ylabel('WCSS')
     plt.show()
+    
+
+#training K-Means model on dataset
+def fit_kmeans_model(normalised_data, n_clusters):
+    kmeans = KMeans(n_clusters = n_clusters, init = 'k-means++', random_state = 42)
+    dependent_variable = kmeans.fit_predict(normalised_data)
+    return dependent_variable, kmeans
+    
+
+#visualising clusters
+def cluster_visualisation(dependent_variable, plot_data, kmeans, indicator):
+    plot_data = np.array(plot_data)
+    plt.scatter(plot_data[dependent_variable == 0, 0], 
+                plot_data[dependent_variable == 0, 1], 
+                s = 100, 
+                c = 'red', 
+                label = 'Cluster 1')
+    plt.scatter(plot_data[dependent_variable == 1, 0], 
+                plot_data[dependent_variable == 1, 1], 
+                s = 100, 
+                c = 'cyan',
+                label = 'Cluster 2')
+    plt.scatter(plot_data[dependent_variable == 2, 0], 
+                plot_data[dependent_variable == 2, 1], 
+                s = 100, 
+                c = 'blue',
+                label = 'Cluster 3')
+    plt.scatter(plot_data[dependent_variable == 3, 0], 
+                plot_data[dependent_variable == 3, 1], 
+                s = 100, 
+                c = 'green',
+                label = 'Cluster 4')
+    plt.scatter(plot_data[dependent_variable == 4, 0], 
+                plot_data[dependent_variable == 4, 1], 
+                s = 100, 
+                c = 'magenta',
+                label = 'Cluster 5')
+    plt.scatter(plot_data[dependent_variable == 5, 0], 
+                plot_data[dependent_variable == 5, 1], 
+                s = 100, 
+                c = 'purple',
+                label = 'Cluster 6')
+    plt.scatter(kmeans.cluster_centers_[:, 0], 
+                kmeans.cluster_centers_[:, 1], 
+                s = 200, 
+                c = 'yellow', 
+                label = 'Centroids')
+    plt.title('Clusters of CO2 Emissions')
+    plt.xlabel('CO2 emission')
+    plt.ylabel(indicator)
+    plt.legend()
+    plt.show()
+
 
 
 #main method
@@ -94,6 +147,17 @@ def main():
     
     #elbow method
     elbow_method(normalised_data) #from graph n_clusters = 6
+    
+    #fit kmeans model
+    dependent_variable, kmeans = fit_kmeans_model(normalised_data, 6)
+    
+    #add dependent_variable to original dataframe
+    original_df['cluster'] = dependent_variable
+    
+    #visualise clusters
+    cluster_visualisation(dependent_variable, plot_data, kmeans, indicator)
 
 if __name__ == "__main__":
     main()
+
+
