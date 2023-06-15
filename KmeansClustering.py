@@ -9,6 +9,17 @@ from scipy.optimize import curve_fit
 
 #Data Preprocessing
 def pre_process_data(climate_change_data, indicator):    
+    """
+    Function to preprocess data i.e.. cleaning the data
+    and selecting required colums and handling null values.
+    
+    Parameters:
+        climate_change_data (dataframe) : complete dataframe
+        indicator (string) : indicator (population or gdp etc..)
+    
+    Returns:
+        required_data_df (dataframe) : cleaned dataframe with req columns
+    """
     required_columns = ['country', 'year', 'co2', indicator]
     required_data_df = climate_change_data[required_columns]
     
@@ -24,6 +35,13 @@ def pre_process_data(climate_change_data, indicator):
 
 #get visual insights before clustering
 def visual_insights(required_data_df, year):
+    """
+    Function to visualise insights from raw data prior to clustering.
+    
+    Parameters:
+        required_data_df (dataframe) : cleaned dataframe with req columns
+        year (int) : desired year to view insights
+    """
     shortlisted_countries_data_df = required_data_df[
         (required_data_df['country'].isin(['United States', 'United Kingdom', 
                                         'Africa', 'Antartica', 'India', 
@@ -39,6 +57,16 @@ def visual_insights(required_data_df, year):
 
 #feature scaling (Normalisation)
 def feature_scaling(required_data_df, sc, indicator):
+    """
+    Function to Normalise data by feature scaling.
+    
+    Parameters:
+        required_data_df (dataframe) : cleaned dataframe with req columns
+        indicator (string) : indicator (population or gdp etc..)
+    
+    Returns:
+        normalised_data (dataframe) : normalised dataframe to fit
+    """
     required_data_df.iloc[:, 2:4] = sc.fit_transform(
         required_data_df.iloc[:, 2:4])
     
@@ -50,6 +78,12 @@ def feature_scaling(required_data_df, sc, indicator):
 
 #using elbow method to find the opitmal number of clusters
 def elbow_method(normalised_data):
+    """
+    Function to find the ideal number of clusters using elbow method.
+    
+    Parameters:
+        normalised_data (dataframe) : normalised dataframe to fit
+    """
     wcss = []
     for i in range(1,11):
         #use k-means++ to avoid random initialisation trap
@@ -213,9 +247,13 @@ def model_curve_fit(original_df, sc):
     plot_confidence_range(year, co2, lower_confidence, 
                           upper_confidence, future_years, predicted_values)
     
+    # Predicted values for future years
+    for year, value in zip(future_years, predicted_values):
+        print(f"Year: {year}, Predicted Value: {value}")
+    
     
 #Plotting
-def plot_confidence_range(year, co2, lower_confidence, 
+def     plot_confidence_range(year, co2, lower_confidence, 
                           upper_confidence, future_years, predicted_values):
     plt.scatter(year, co2, label='Actual Data')
     plt.plot(future_years, predicted_values, label='Best Fitting Function')
